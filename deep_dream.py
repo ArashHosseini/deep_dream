@@ -47,25 +47,32 @@ class DeepDream:
                 updated_gradient[y:y+TILE_SIZE,x:x+TILE_SIZE] = new_gradient
         return np.roll(np.roll(updated_gradient, -shifted_x, 1), -shifted_y, 0)
     
-    def optimize_image(self, layer, image, iterations, step_size):
+    def optimize_image(self, layer, image, left_image, iterations, step_size):
         image = image.copy()
+        left_image = left_image.copy()
         for i in range(iterations):
             gradient = self.update_gradient(self.model.get_gradient(layer), image)
             gradient = gaussian_filter(gradient, sigma=(BLUR_SIGMA, BLUR_SIGMA, 0))
             scaled_step_size = step_size / (np.std(gradient) + 1e-8)
             image += gradient * scaled_step_size
+            left_image += gradient * scaled_step_size 
             print("iteration " + str(i) + " out of " + str(iterations), end="\r" if i != iterations-1 else "\r\033[K")
-        return image
+        return image, left_image
     
-    def recursively_optimize(self, layer, image, levels, rescale_factor, blend, iterations, step_size):
+    def recursively_optimize(self, layer, image, left_image, levels, rescale_factor, blend, iterations, step_size):
         
         if levels > 0:
             blurred = gaussian_filter(image, sigma=(BLUR_SIGMA, BLUR_SIGMA, 0))
 
             downscaled = resize_image(image=blurred, factor=rescale_factor)
 
-            final_image = self.recursively_optimize(layer=layer,
+            blurred_left = gaussian_filter(image, sigma=(BLUR_SIGMA, BLUR_SIGMA, 0))
+
+            downscaled_left = resize_image(image=blurred_left, factor=rescale_factor)
+
+            final_image, final_left = self.recursively_optimize(layer=layer,
                                                     image=downscaled,
+                                                    left_image = downscaled_left,
                                                     levels=levels-1,
                                                     rescale_factor=rescale_factor,
                                                     blend=blend,
@@ -73,23 +80,27 @@ class DeepDream:
                                                     step_size=step_size)
 
             upscaled = resize_image(image=final_image, size=image.shape[0:2])
-            
+            upscaled_left = resize_image(image=final_left, size=left_image.shape[0:2])
+
             image = blend * image + (1.0 - blend) * upscaled
+            left_image = blend * left_image + (1.0 - blend) * upscaled_left
 
         print("\rlevel " + str(levels) + " out of " + str(LEVELS))
-        final_image = self.optimize_image(layer=layer,
-                                          image=image,
-                                          iterations=iterations,
-                                          step_size=step_size)
-        return final_image   
+        final_image, final_left = self.optimize_image(layer=layer,
+                                                      image=image,
+                                                      left_image=left_image,
+                                                      iterations=iterations,
+                                                      step_size=step_size)
+        return final_image, final_left  
     
 def main():
     if len(sys.argv) > 1:
-        image_to_open = sys.argv[1]
+        image_to_open_right, image_to_open_left  = sys.argv[1], sys.argv[2]
     else:
         response = requests.get("https://picsum.photos/1080")
         image_to_open = BytesIO(response.content)
-    image = np.float32(Image.open(image_to_open))
+
+    image_right, image_left = np.float32(Image.open(image_to_open_right)), np.float32(Image.open(image_to_open_left))
 
     model = Inception()
     
@@ -99,20 +110,22 @@ def main():
     else:
         layer_indices = LAYER_INDICES
         
-    final_image = image
+    final_image = image_right
     deep_dream = DeepDream(model)
     for i, layer_index in enumerate(layer_indices):
         print("LAYER " + model.layer_names[layer_index] + ", " + str(i) + " out of " + str(len(layer_indices)))
         layer = model.layers[layer_index]
-        final_image = deep_dream.recursively_optimize(layer=layer,
-                                                      image=final_image,
-                                                      iterations=ITERATIONS,
-                                                      step_size=STEP_SIZE,
-                                                      rescale_factor=RESCALE_FACTOR,
-                                                      levels=LEVELS,
-                                                      blend=BLEND)
-    save_image(final_image, OUTPUT_IMAGE_NAME + ".jpeg")
-  
+        final_image, left_image = deep_dream.recursively_optimize(layer=layer,
+                                                                  image=final_image,
+                                                                  left_image = image_left, 
+                                                                  iterations=ITERATIONS,
+                                                                  step_size=STEP_SIZE,
+                                                                  rescale_factor=RESCALE_FACTOR,
+                                                                  levels=LEVELS,
+                                                                  blend=BLEND)
+    save_image(final_image, "right" + ".jpeg")
+    save_image(left_image, "left" + ".jpeg")
+
 if __name__== "__main__":
     main()
  
