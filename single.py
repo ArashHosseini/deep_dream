@@ -1,4 +1,8 @@
 import random, requests, math, sys, os
+
+
+os.environ["CUDA_VISIBLE_DEVICES"]="0,1"
+
 import numpy as np
 from PIL import Image
 from io import BytesIO
@@ -48,6 +52,7 @@ class DeepDream:
         return np.roll(np.roll(updated_gradient, -shifted_x, 1), -shifted_y, 0)
     
     def optimize_image(self, layer, image, iterations, step_size):
+
         image = image.copy()
         for i in range(iterations):
             gradient = self.update_gradient(self.model.get_gradient(layer), image)
@@ -67,6 +72,7 @@ class DeepDream:
             final_image = self.recursively_optimize(layer=layer,
                                                     image=downscaled,
                                                     levels=levels-1,
+
                                                     rescale_factor=rescale_factor,
                                                     blend=blend,
                                                     iterations=iterations,
@@ -85,34 +91,37 @@ class DeepDream:
     
 def main():
     if len(sys.argv) > 1:
-        image_to_open = sys.argv[1]
+        dir_to_open, render_fold = sys.argv[1], sys.argv[2]
     else:
         response = requests.get("https://picsum.photos/1080")
         image_to_open = BytesIO(response.content)
-    image = np.float32(Image.open(image_to_open))
 
     model = Inception()
-    
-    if LAYER_INDICES is None:
-        optimizations_to_perform = random.randrange(MIN_OPERATIONS, MAX_OPERATIONS)
-        layer_indices = random.sample(range(MIN_LAYER, MAX_LAYER), optimizations_to_perform)
-    else:
-        layer_indices = LAYER_INDICES
-        
-    final_image = image
     deep_dream = DeepDream(model)
-    for i, layer_index in enumerate(layer_indices):
-        print("LAYER " + model.layer_names[layer_index] + ", " + str(i) + " out of " + str(len(layer_indices)))
-        layer = model.layers[layer_index]
-        final_image = deep_dream.recursively_optimize(layer=layer,
-                                                      image=final_image,
-                                                      iterations=ITERATIONS,
-                                                      step_size=STEP_SIZE,
-                                                      rescale_factor=RESCALE_FACTOR,
-                                                      levels=LEVELS,
-                                                      blend=BLEND)
-    save_image(final_image, OUTPUT_IMAGE_NAME + ".jpeg")
+
+    for file_in_dir in os.listdir(dir_to_open):
+        image = np.float32(Image.open(os.path.join(dir_to_open,file_in_dir)))
+        
+        if LAYER_INDICES is None:
+            optimizations_to_perform = random.randrange(MIN_OPERATIONS, MAX_OPERATIONS)
+            layer_indices = random.sample(range(MIN_LAYER, MAX_LAYER), optimizations_to_perform)
+        else:
+            layer_indices = LAYER_INDICES
+            
+        final_image = image
+        for i, layer_index in enumerate(layer_indices):
+            print("LAYER " + model.layer_names[layer_index] + ", " + str(i) + " out of " + str(len(layer_indices)))
+            layer = model.layers[layer_index]
+            final_image = deep_dream.recursively_optimize(layer=layer,
+                                                          image=final_image,
+                                                          iterations=ITERATIONS,
+                                                          step_size=STEP_SIZE,
+                                                          rescale_factor=RESCALE_FACTOR,
+                                                          levels=LEVELS,
+                                                          blend=BLEND)
+        save_image(final_image, render_fold + "/" + file_in_dir + "_dreamed.jpeg")
   
 if __name__== "__main__":
     main()
  
+

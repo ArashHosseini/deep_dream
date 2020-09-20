@@ -70,61 +70,65 @@ class DeepDream:
 
             downscaled_left = resize_image(image=blurred_left, factor=rescale_factor)
 
-            final_image, final_left = self.recursively_optimize(layer=layer,
+            right_image, final_left = self.recursively_optimize(layer=layer,
                                                     image=downscaled,
                                                     left_image = downscaled_left,
                                                     levels=levels-1,
+
                                                     rescale_factor=rescale_factor,
                                                     blend=blend,
                                                     iterations=iterations,
                                                     step_size=step_size)
 
-            upscaled = resize_image(image=final_image, size=image.shape[0:2])
+            upscaled = resize_image(image=right_image, size=image.shape[0:2])
             upscaled_left = resize_image(image=final_left, size=left_image.shape[0:2])
 
             image = blend * image + (1.0 - blend) * upscaled
             left_image = blend * left_image + (1.0 - blend) * upscaled_left
 
         print("\rlevel " + str(levels) + " out of " + str(LEVELS))
-        final_image, final_left = self.optimize_image(layer=layer,
+        right_image, final_left = self.optimize_image(layer=layer,
                                                       image=image,
                                                       left_image=left_image,
                                                       iterations=iterations,
                                                       step_size=step_size)
-        return final_image, final_left  
+        return right_image, final_left  
     
 def main():
     if len(sys.argv) > 1:
-        image_to_open_right, image_to_open_left  = sys.argv[1], sys.argv[2]
+        dir_to_open_right, dir_to_open_left, dir_to_render_right, dir_to_render_left  = sys.argv[1], sys.argv[2], sys.argv[3], sys.argv[4]
+
     else:
         response = requests.get("https://picsum.photos/1080")
         image_to_open = BytesIO(response.content)
 
-    image_right, image_left = np.float32(Image.open(image_to_open_right)), np.float32(Image.open(image_to_open_left))
 
     model = Inception()
-    
-    if LAYER_INDICES is None:
-        optimizations_to_perform = random.randrange(MIN_OPERATIONS, MAX_OPERATIONS)
-        layer_indices = random.sample(range(MIN_LAYER, MAX_LAYER), optimizations_to_perform)
-    else:
-        layer_indices = LAYER_INDICES
-        
-    final_image = image_right
     deep_dream = DeepDream(model)
-    for i, layer_index in enumerate(layer_indices):
-        print("LAYER " + model.layer_names[layer_index] + ", " + str(i) + " out of " + str(len(layer_indices)))
-        layer = model.layers[layer_index]
-        final_image, left_image = deep_dream.recursively_optimize(layer=layer,
-                                                                  image=final_image,
-                                                                  left_image = image_left, 
-                                                                  iterations=ITERATIONS,
-                                                                  step_size=STEP_SIZE,
-                                                                  rescale_factor=RESCALE_FACTOR,
-                                                                  levels=LEVELS,
-                                                                  blend=BLEND)
-    save_image(final_image, "right" + ".jpeg")
-    save_image(left_image, "left" + ".jpeg")
+
+    for image_to_open_right, image_to_open_left in zip(os.listdir(dir_to_open_right),os.listdir(dir_to_open_left)):
+        image_right, image_left = np.float32(Image.open(os.path.join(dir_to_open_right, image_to_open_right))),np.float32(Image.open(os.path.join(dir_to_open_left, image_to_open_left)))
+    
+        if LAYER_INDICES is None:
+            optimizations_to_perform = random.randrange(MIN_OPERATIONS, MAX_OPERATIONS)
+            layer_indices = random.sample(range(MIN_LAYER, MAX_LAYER), optimizations_to_perform)
+        else:
+            layer_indices = LAYER_INDICES
+            
+        right_image = image_right
+        for i, layer_index in enumerate(layer_indices):
+            print("LAYER " + model.layer_names[layer_index] + ", " + str(i) + " out of " + str(len(layer_indices)))
+            layer = model.layers[layer_index]
+            right_image, left_image = deep_dream.recursively_optimize(layer=layer,
+                                                                      image=right_image,
+                                                                      left_image = image_left, 
+                                                                      iterations=ITERATIONS,
+                                                                      step_size=STEP_SIZE,
+                                                                      rescale_factor=RESCALE_FACTOR,
+                                                                      levels=LEVELS,
+                                                                      blend=BLEND)
+        save_image(right_image, dir_to_render_right + "/" + image_to_open_right + ".jpeg")
+        save_image(left_image, dir_to_render_left + "/" + image_to_open_left + ".jpeg")
 
 if __name__== "__main__":
     main()
