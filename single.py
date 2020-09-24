@@ -12,7 +12,7 @@ from inception import Inception
 from utilities import save_image, resize_image, normalize_image
 
 OUTPUT_IMAGE_NAME = "deep_dream"
-ITERATIONS = 15
+ITERATIONS = 4
 STEP_SIZE = 2.0
 RESCALE_FACTOR = 0.7
 LEVELS = 5
@@ -35,7 +35,7 @@ class DeepDream:
     
     def __init__(self, model):
         self.model = model
-        self.session = tf.InteractiveSession(graph=model.graph)
+        self.session = tf.Session(graph=model.graph)
 
     def update_gradient(self, gradient, image):
         height, width = image.shape[:2]
@@ -87,6 +87,7 @@ class DeepDream:
                                           image=image,
                                           iterations=iterations,
                                           step_size=step_size)
+        #self.session.close()
         return final_image   
     
 def main():
@@ -97,9 +98,9 @@ def main():
         image_to_open = BytesIO(response.content)
 
     model = Inception()
-    deep_dream = DeepDream(model)
 
     for file_in_dir in os.listdir(dir_to_open):
+        deep_dream = DeepDream(model)
         image = np.float32(Image.open(os.path.join(dir_to_open,file_in_dir)))
         
         if LAYER_INDICES is None:
@@ -107,7 +108,7 @@ def main():
             layer_indices = random.sample(range(MIN_LAYER, MAX_LAYER), optimizations_to_perform)
         else:
             layer_indices = LAYER_INDICES
-            
+        print (20*">", layer_indices)
         final_image = image
         for i, layer_index in enumerate(layer_indices):
             print("LAYER " + model.layer_names[layer_index] + ", " + str(i) + " out of " + str(len(layer_indices)))
