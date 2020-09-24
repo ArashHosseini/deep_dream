@@ -35,7 +35,7 @@ class DeepDream:
     
     def __init__(self, model):
         self.model = model
-        self.session = tf.Session(graph=model.graph)
+        self.session = tf.InteractiveSession(graph=model.graph)
 
     def update_gradient(self, gradient, image):
         height, width = image.shape[:2]
@@ -98,9 +98,9 @@ def main():
         image_to_open = BytesIO(response.content)
 
     model = Inception()
+    deep_dream = DeepDream(model)
 
     for file_in_dir in os.listdir(dir_to_open):
-        deep_dream = DeepDream(model)
         image = np.float32(Image.open(os.path.join(dir_to_open,file_in_dir)))
         
         if LAYER_INDICES is None:
